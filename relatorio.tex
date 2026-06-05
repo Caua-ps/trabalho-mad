@@ -1,0 +1,522 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{black!30},
+  numbers=none,
+  showstringspaces=false,
+}
+
+\title{Vigilância de Partições Retangulares\\
+\large Projeto Prático --- MAD CC3003 2025/26}
+\author{Grupo 06\\
+Cauã Pinheiro Souza (202302423) \and Matheus Gonçalves Guerra (202205324)}
+\date{Maio 2026}
+
+\begin{document}
+\maketitle
+
+\section{Introdução}
+
+O problema consiste em determinar uma colocação mínima de guardas
+nos vértices de uma partição retangular $\Pi$, garantindo que todos
+os retângulos de $\Pi$ (ou um subconjunto $\Pi' \subset \Pi$ dado)
+ficam vigiados. Um guarda colocado num vértice $p$ vigia todos os
+retângulos incidentes em $p$.
+
+\paragraph{Notação.} Seguimos a notação do problema dos
+``Postos de Vigia'' (slides MAD2526\_clp e clp\_swi\_2026):
+\begin{itemize}[noitemsep]
+  \item $R$ --- retângulos a cobrir.
+  \item $P$ --- vértices candidatos a posto de guarda.
+  \item $G[r]$ --- vértices que veem o retângulo $r$.
+  \item $V[p]$ --- retângulos que o vértice $p$ vê (inversa de $G$).
+  \item $S \subseteq P$ --- conjunto de guardas escolhidos (solução).
+\end{itemize}
+
+\paragraph{Pré-processamento partilhado por todas as abordagens.}
+\begin{enumerate}[noitemsep,topsep=2pt]
+  \item Leitura do ficheiro produzido pelo gerador \texttt{rectParts.c}
+    (formato: na linha~1, o número de instâncias; cada instância
+    começa pelo número de retângulos $nr$, seguida de $nr$ linhas
+    com \texttt{id $\;$ nv $\;$ x1 y1 \dots xnv ynv}).
+  \item Identificação do retângulo exterior como aquele com a
+    \emph{bounding box} máxima.
+  \item Descarte dos vértices da borda externa do candidato a guarda,
+    pela observação da alínea~(b) do exercício~7 da fp3:
+    para qualquer solução ótima, é sempre possível trocar um guarda
+    da borda por um vizinho interno equivalente.
+\end{enumerate}
+
+
+\section{Q1 --- Estratégias \emph{greedy}}
+
+\subsection{Métodos}
+
+Avaliámos duas estratégias gulosas, ambas com origem direta no
+material da cadeira.
+
+\paragraph{(1) \emph{first-fail}.} Em cada iteração escolher o
+retângulo $r$ não coberto com menos candidatos disponíveis (menor
+$|G[r] \setminus S|$); entre os candidatos desse retângulo,
+escolher o que cobre mais retângulos ainda não cobertos. A relação
+com a heurística \emph{first-fail} usada na procura de soluções de
+CSPs é discutida explicitamente na alínea~(a) do exercício~7
+da fp3 e nos slides MAD2526\_clp: atacar primeiro a variável mais
+restringida (com menor domínio) é onde a procura é mais provável
+falhar e portanto onde mais se corta o espaço de procura. No nosso
+problema, o ``domínio'' de cobertura de cada retângulo é o conjunto
+$G[r]$ dos vértices que o veem.
+
+\paragraph{(2) \emph{max-cobertura}.} Em cada iteração escolher o
+vértice $p$ que maximiza $|V[p] \cap \text{não\_cobertos}|$. É a
+estratégia clássica para o problema de \emph{minimum set cover} e
+segue o mesmo padrão das estratégias gulosas apresentadas nos
+slides (Kruskal: escolher o ramo de menor peso; \emph{knapsack}
+fraccionário: escolher pelo maior rácio valor/peso) --- escolha
+baseada num critério local de maior benefício por passo.
+
+\paragraph{Complexidade.} Ambas correm em $O(|R|\cdot|P|)$, polinomial
+em $n=|R|+|P|$.
+
+\paragraph{Pseudo-código \emph{first-fail}.}
+\begin{lstlisting}
+S, nao_cobertos <- {}, R
+enquanto nao_cobertos != {}:
+    r* <- argmin_{r em nao_cobertos} |G[r] \ S|
+    p* <- argmax_{p em G[r*] \ S} |V[p] cap nao_cobertos|
+    S <- S cup {p*};  nao_cobertos <- nao_cobertos \ V[p*]
+\end{lstlisting}
+
+\subsection{Avaliação experimental}
+
+Para avaliar a qualidade das heurísticas, comparámo-las contra o
+ótimo obtido por Programação Inteira (modelo dos slides \mbox{MAD2526\_clp},
+\textit{Postos de Vigia}, resolvido com Google OR-Tools / SCIP).
+
+Geraram-se baterias de instâncias com o gerador \texttt{rectParts.c}
+(distribuição geométrica, $\tau = 0{,}75$) para
+$nr \in \{10, 20, 40, 80, 160\}$, com 20 instâncias por tamanho.
+
+\begin{table}[h]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{rrrrrrrrrr}
+\toprule
+$nr$ & ot.\ méd. & ff méd. & ff \%ót. & ff exc.\ \% & mc méd. & mc \%ót. & mc exc.\ \% & $t_{\text{PI}}$ (ms) \\
+\midrule
+ 10 & 3{,}80 & 4{,}00 & 80{,}0 \% & 6{,}25\,\% & 4{,}15 & 65{,}0 \% & 10{,}00\,\% & 4{,}6 \\
+ 20 & 7{,}20 & 7{,}85 & 50{,}0 \% & 9{,}29\,\% & 8{,}55 & 0{,}0 \% & 18{,}93\,\% & 5{,}5 \\
+ 40 & 14{,}40 & 16{,}20 & 0{,}0 \% & 12{,}65\,\% & 17{,}15 & 5{,}0 \% & 19{,}27\,\% & 13{,}5 \\
+ 80 & 27{,}60 & 31{,}50 & 0{,}0 \% & 14{,}14\,\% & 33{,}60 & 0{,}0 \% & 21{,}78\,\% & 24{,}4 \\
+ 160 & 55{,}25 & 63{,}05 & 0{,}0 \% & 14{,}15\,\% & 68{,}80 & 0{,}0 \% & 24{,}54\,\% & 102{,}0 \\
+\bottomrule
+\end{tabular}
+\caption{Q1: número médio de guardas (ót.\ = ótimo;
+ff = \emph{first-fail}; mc = \emph{max-cobertura}). ``\%ót.'' = percentagem de
+instâncias em que a heurística atinge o ótimo. ``exc.\,\%'' = excesso médio
+relativo ao ótimo.}
+\label{tab:q1}
+\end{table}
+
+\paragraph{Validação na fp3 ex.~7.} Ambas as heurísticas atingem o ótimo
+conhecido ($|S| = 4$) na instância canónica, em parte porque essa
+instância contém retângulos com $|G[r]|=1$, que forçam a escolha.
+
+\subsection{Discussão}
+
+\paragraph{\emph{first-fail} domina \emph{max-cobertura}.} Em todos os
+tamanhos a estratégia \emph{first-fail} produz menos guardas. A diferença
+estabiliza em cerca de 10 pontos percentuais de excesso médio nas
+instâncias maiores ($\approx 14\,\%$ vs $\approx 24\,\%$ para $nr=160$).
+Embora a \emph{max-cobertura} seja a heurística clássica para
+\emph{set cover}, com garantia de aproximação $H(|R|) = O(\log |R|)$,
+ela falha aqui porque ignora a estrutura geométrica do problema: ao
+maximizar a cobertura local pode deixar retângulos com poucos candidatos
+sem opções boas.
+
+\paragraph{Estrutura das instâncias.} Numa análise das instâncias
+geradas, verificou-se que praticamente nunca há retângulos com
+$|G[r]|=1$ (i.e., guardas forçados), mas existe uma cauda de
+retângulos com $|G[r]| \in \{2,3\}$. São estes que o \emph{first-fail}
+ataca primeiro, capturando a maior parte do ganho heurístico.
+
+\paragraph{Tempo.} O tempo das heurísticas é desprezável (poucos ms);
+o solver exato continua rápido (102~ms em média para $nr=160$).
+Para os tamanhos estudados não há vantagem em usar heurísticas em
+detrimento do ótimo; a sua utilidade reside na compreensão da
+estrutura do problema e como termo de comparação para variantes
+mais complexas (Q4).
+
+
+\section{Q2 --- Programação Inteira e Programação por Restrições}
+
+\subsection{Modelo Matemático}
+
+Para modelar o problema de vigilância de partições retangulares como
+um problema de otimização combinatória, partilhamos a mesma base
+teórica entre a Programação Inteira (PI) e a Programação por
+Restrições (CSP). Recorrendo ao pré-processamento estabelecido na Q1
+(onde a borda externa é descartada), reutilizamos o conjunto de
+vértices candidatos válidos $P$ e o conjunto de retângulos a cobrir
+$R$. O modelo define-se da seguinte forma:
+
+\begin{itemize}[topsep=2pt,itemsep=2pt]
+  \item \textbf{Variáveis de decisão:} $x_p \in \{0,1\}$ para cada
+    $p \in P$, onde $x_p = 1$ indica a colocação de um guarda no
+    vértice $p$.
+  \item \textbf{Função objetivo:} minimizar o número total de guardas
+    colocados na partição,
+    \[ \min \sum_{p \in P} x_p . \]
+  \item \textbf{Restrições de cobertura:} para garantir que todos os
+    retângulos são vigiados, cada retângulo $r \in R$ tem de possuir
+    pelo menos um guarda num dos seus vértices incidentes $G[r]$,
+    \[ \sum_{p \in G[r]} x_p \ge 1 \qquad \forall\, r \in R . \]
+\end{itemize}
+
+\subsection{Implementação MAC (\emph{Maintaining Arc Consistency}) e \emph{Branch \& Bound}}
+
+Na alínea~(b) implementámos um algoritmo de pesquisa com retrocesso
+(\emph{backtracking}) que não recorre a motores externos de CSP. Para
+garantir eficiência computacional, o algoritmo foi reforçado com duas
+técnicas cruciais:
+
+\begin{itemize}[topsep=2pt,itemsep=2pt]
+  \item \textbf{Propagação de restrições (MAC):} em cada nó da árvore
+    de pesquisa aplicamos consistência de arco. Se, após algumas
+    atribuições, um retângulo ficar sem guardas atribuídos e com
+    apenas um vértice livre restante no seu conjunto $G[r]$, o
+    algoritmo força imediatamente a colocação de um guarda nesse
+    vértice ($x_p = 1$). Se um retângulo ficar sem guardas e sem
+    vértices livres, o ramo falha imediatamente.
+  \item \textbf{\emph{Branch and bound} (\emph{pruning}):} o algoritmo
+    mantém em memória o custo da melhor solução viável encontrada
+    ($S^*$). Qualquer ramo da árvore de pesquisa que acumule um número
+    de guardas igual ou superior a $|S^*|$ é imediatamente podado,
+    reduzindo drasticamente o espaço de procura.
+\end{itemize}
+
+\subsection{Soluções com motores externos: CP-SAT e Prolog (clpfd)}
+
+Para as alíneas seguintes, o mesmo modelo foi traduzido para
+ferramentas \emph{state-of-the-art}:
+
+\begin{itemize}[topsep=2pt,itemsep=2pt]
+  \item \textbf{Google OR-Tools (CP-SAT):} o modelo foi mapeado
+    utilizando a interface \texttt{cp\_model}, instanciando vetores de
+    variáveis booleanas. As restrições foram aplicadas diretamente
+    iterando sobre as listas de índices dos vértices incidentes a cada
+    retângulo, tirando partido da inferência lógica do solver SAT
+    subjacente.
+  \item \textbf{SWI-Prolog (clpfd):} a mesma lógica foi declarada em
+    Prolog usando domínios finitos (\texttt{ins 0..1}). A cobertura de
+    cada face foi garantida com a restrição
+    \texttt{sum(VarsDaFace, \#>=, 1)}, seguida de um predicado de
+    otimização \texttt{labeling([min(MinGuardas)], Guardas)}.
+\end{itemize}
+
+
+\section{Q3 --- Programação Dinâmica}
+
+Para que a aplicação desta técnica valha a pena, devemos avaliar se é
+possível repartir o problema em subproblemas independentes e se isso
+compensa face às restantes soluções possíveis.
+
+\subsection{A dificuldade da subestrutura em grafos 2D arbitrários}
+
+Ao modelarmos a partição retangular num grafo (onde os retângulos são
+os elementos a cobrir e os vértices são os pontos de decisão),
+obtemos uma estrutura muito densa e com diversos ciclos.
+
+A decisão de colocar um guarda num vértice $v_i$ resolve a cobertura
+dos retângulos incidentes, mas altera o ``estado'' necessário para
+tomar decisões nos vértices vizinhos. Como o mapa é bidimensional,
+estas decisões propagam-se em várias direções, fechando ciclos e
+destruindo a independência local exigida pela Programação Dinâmica
+clássica (como a aplicada em árvores ou sequências lineares). O estado
+necessário para memorizar um subproblema não se resume a um único nó,
+mas sim a toda a fronteira de intersecção com o resto do mapa.
+
+\subsection{Programação Dinâmica de Perfil (\emph{Profile DP})}
+
+A única forma exata de aplicar Programação Dinâmica a este problema de
+grelha bidimensional seria através de uma técnica conhecida como
+Programação Dinâmica de Perfil (\emph{Profile DP} ou varrimento de
+linha). O algoritmo funcionaria, em teoria, da seguinte forma:
+
+\begin{enumerate}[topsep=2pt,itemsep=0pt]
+  \item Uma linha imaginária varre o mapa ortogonal da esquerda para a
+    direita (ou de cima para baixo).
+  \item A linha interseta, a qualquer momento, um conjunto de
+    retângulos, formando uma ``fronteira'' ou ``perfil'' de largura
+    $W$.
+  \item O estado da PD teria de memorizar todas as combinações
+    possíveis de cobertura para os retângulos dessa fronteira.
+  \item Para cada nova coluna avançada, o algoritmo testaria todas as
+    permutações válidas de guardas e faria a transição de estados.
+\end{enumerate}
+
+\subsection{Complexidade}
+
+A complexidade temporal e espacial da Programação Dinâmica de Perfil é
+governada pelo tamanho máximo da fronteira $W$. O número de estados a
+memorizar em cada passo cresce exponencialmente, na ordem de
+$\mathcal{O}(2^W)$. No nosso caso de estudo (por exemplo, uma
+instância com 40 retângulos e 82 vértices interligados num espaço
+denso), a largura do perfil $W$ atinge valores que originam uma
+explosão combinatória abrupta na tabela de memorização. Conclui-se
+que, embora matematicamente possível, esta abordagem é
+computacionalmente impraticável e significativamente inferior às
+técnicas baseadas em restrições utilizadas na Q2.
+
+
+\section{Q4 --- Extensões}
+
+\subsection{Q4a --- Guardas com cores}
+
+\paragraph{Enunciado e modelo.}
+Cada guarda ativo recebe uma cor. Requisito: se dois guardas $p$
+e $q$ veem ambos o mesmo retângulo $r$ (i.e.~$p,q \in G[r]$),
+as suas cores diferem. Em linguagem CSP/CLP é uma restrição
+\texttt{all\_distinct} aplicada às cores dos guardas ativos em cada
+$G[r]$ --- a mesma primitiva usada nos slides MAD2526\_clp (SEND+MORE,
+Sudoku) e em clp\_swi\_2026 (\textit{quatroEstilos}).
+
+Equivalentemente, define-se o \emph{grafo de conflito} $H = (S, E)$
+com $E = \{\{p,q\}: \exists r,\ p,q \in S \cap G[r]\}$; o número
+mínimo de cores é o número cromático $\chi(H)$.
+
+\paragraph{Duas leituras da pergunta.}
+A pergunta do enunciado --- ``para o número mínimo de guardas,
+qual seria o número mínimo de cores?'' --- admite duas interpretações,
+porque o número mínimo de guardas pode ser atingido por várias
+soluções diferentes, cada uma com um grafo de conflito distinto:
+\begin{description}[topsep=2pt,itemsep=0pt]
+  \item[Leitura A (sequencial).] Fixar uma solução ótima de guardas
+    $S$ e calcular $\chi(H_S)$ --- o número mínimo de cores para
+    \emph{essa} colocação.
+  \item[Leitura B (lexicográfica).] Entre \emph{todas} as colocações
+    com o número mínimo de guardas $G^*$, escolher a que minimiza o
+    número de cores.
+\end{description}
+Implementámos ambas. A Leitura~B fornece uma resposta mais forte à
+pergunta; a Leitura~A é a interpretação mais direta e útil quando
+a solução de guardas já está fixada por outras razões.
+
+\paragraph{Modelo de Leitura B (lexicográfico).} Variáveis
+booleanas $y_{p,k}$ = ``guarda $p$ ativo com cor $k$'' e
+$\text{usa}_k$ = ``cor $k$ usada por algum guarda''.
+\begin{align*}
+\min \quad & \textstyle\sum_k \text{usa}_k \\
+\text{s.a.} \quad & \textstyle\sum_{p \in G[r]} x_p \ge 1, \quad r \in R \\
+& \textstyle\sum_p x_p = G^* \\
+& \textstyle\sum_k y_{p,k} = x_p, \quad p \in P \\
+& \textstyle\sum_{p \in G[r]} y_{p,k} \le 1, \quad r \in R,\ k \\
+& y_{p,k} \le \text{usa}_k \\
+& \text{usa}_k \ge \text{usa}_{k+1} \quad \text{(quebra de simetria)} \\
+& x_p, y_{p,k}, \text{usa}_k \in \{0,1\}
+\end{align*}
+A restrição $\sum_{p \in G[r]} y_{p,k} \le 1$ é exatamente a tradução
+para variáveis booleanas da restrição \texttt{all\_distinct} sobre
+as cores dos guardas ativos em $G[r]$. Resolvido com CP-SAT
+(Google OR-Tools).
+
+\paragraph{Resultados experimentais (30 instâncias por tamanho).}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{rrrrrrrr}
+\toprule
+$nr$ & guardas méd. & cores$_A$ méd. & $A$ máx. & cores$_B$ méd. & $B$ máx. & $B$ prov.\ ót. \\
+\midrule
+ 10 & 3{,}9 & 1{,}90 & 3 & 1{,}13 & 2 & 100\,\% \\
+ 20 & 7{,}4 & 2{,}13 & 3 & 1{,}37 & 2 & 100\,\% \\
+ 40 & 14{,}2 & 2{,}10 & 4 & 1{,}60 & 3 & 100\,\% \\
+ 80 & 27{,}7 & 2{,}23 & 4 & 1{,}63 & 2 & 100\,\% \\
+\bottomrule
+\end{tabular}
+\caption{Q4a: número de cores nas duas leituras.}
+\label{tab:q4a}
+\end{table}
+
+\paragraph{Discussão.}
+\begin{itemize}[topsep=2pt,itemsep=0pt]
+  \item O número de cores mantém-se baixo em todas as instâncias
+    estudadas ($\le 4$ na Leitura~A, $\le 3$ na Leitura~B). A
+    explicação geométrica é que o número de cores é limitado
+    inferiormente pelo tamanho da maior \emph{clique} de guardas que
+    se veem todos no mesmo retângulo, e cada retângulo tem um número
+    limitado de vértices candidatos.
+
+  \item A Leitura~B dá sistematicamente menos cores do que a Leitura~A
+    (média $\approx 1{,}5$ contra $\approx 2{,}1$). Em muitas instâncias
+    basta uma cor na Leitura~B, indicando que existe uma colocação
+    ótima de guardas em que nenhuns dois guardas veem o mesmo retângulo.
+
+  \item Resposta à pergunta do enunciado: para o número mínimo de
+    guardas, o número mínimo de cores é tipicamente $1$ ou $2$ e
+    raramente $3$. Depende criticamente de qual solução ótima de
+    guardas se escolhe --- é o ponto subtil que distingue as duas
+    leituras.
+\end{itemize}
+
+\subsection{Q4b --- Guardas com maior alcance}
+
+\paragraph{Enunciado e interpretação.}
+``Permitir que um guarda num vértice possa guardar não só os
+retângulos incidentes mas também vizinhos a uma distância (no grafo)
+não superior a um valor $D$ dado como parâmetro.''
+
+A decisão central é a interpretação de ``o grafo''. Adotámos a
+seguinte: \emph{o grafo é o grafo dos vértices da subdivisão planar}
+--- nós são os vértices $(x,y)$ da partição; arestas são os
+segmentos entre vértices consecutivos ao longo das linhas da grelha.
+Justificação:
+\begin{enumerate}[noitemsep,topsep=2pt]
+  \item A frase do enunciado diz ``um guarda \emph{num vértice} \dots
+    distância (no grafo)'' --- a distância é naturalmente medida a
+    partir do vértice onde o guarda está, no grafo onde esse
+    vértice vive.
+  \item Para $D=0$ (``vizinhos a distância 0'' $=$ o próprio vértice)
+    recupera-se exatamente a definição base ``vê as peças incidentes
+    nesse vértice'' (fp3 ex.~7). Verificámos isto computacionalmente.
+  \item O ficheiro \texttt{types.h} do gerador define adjacência entre
+    vértices (campo \texttt{nxt[2]}: ``próximo vértice na mesma linha
+    XX e YY''). É a estrutura de grafo presente no código.
+\end{enumerate}
+
+\paragraph{Modelo modificado.} Idêntico ao modelo base, com
+$G[r]$ substituído por
+\[
+  G_D[r] \;=\; \{\, p \in P : \exists u,\ \text{dist}_{\text{grafo}}(p,u) \le D
+  \ \text{e}\ u \in G[r]\,\}.
+\]
+
+\paragraph{Algoritmo.} O grafo não tem pesos, pelo que a distância
+mede-se em número de arestas. Calculamos $V_D[p]$ por
+\emph{BFS limitado a profundidade $D$} (slide DAA2526\_grafos5),
+caso particular de Dijkstra com pesos unitários
+(slide DAA2526\_grafos3). O solver de cobertura é o mesmo da Q2a.
+
+\paragraph{Resultados experimentais (30 instâncias por tamanho).}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+$nr$ & $D=0$ & $D=1$ & $D=2$ & $D=3$ & $D=4$ \\
+\midrule
+ 10 & 3{,}9 & 2{,}1 & 1{,}8 & 1{,}1 & 1{,}0 \\
+ 20 & 7{,}4 & 4{,}3 & 3{,}0 & 2{,}0 & 1{,}8 \\
+ 40 & 14{,}2 & 7{,}9 & 5{,}1 & 3{,}3 & 2{,}5 \\
+ 80 & 27{,}7 & 15{,}2 & 9{,}5 & 6{,}3 & 4{,}5 \\
+\bottomrule
+\end{tabular}
+\caption{Q4b: número médio de guardas em função do alcance $D$.}
+\label{tab:q4b}
+\end{table}
+
+\paragraph{Discussão.}
+\begin{itemize}[topsep=2pt,itemsep=0pt]
+  \item O alcance reduz substancialmente o número de guardas
+    necessários. Em $nr=80$, passar de $D=0$ para $D=1$ corta o
+    número de guardas quase para metade ($27{,}7 \to 15{,}2$).
+    Cada incremento adicional continua a reduzir, com retornos
+    decrescentes; para $D$ suficientemente grande, um único
+    guarda chega.
+
+  \item Verificação: para $D=0$ o número médio de guardas coincide
+    exatamente com o valor reportado na Q1 (Tabela~\ref{tab:q1}),
+    confirmando que a extensão generaliza corretamente o problema
+    base.
+
+  \item Os tempos de resolução continuam baixos
+    --- o gargalo computacional é o solver de cobertura, não o BFS.
+\end{itemize}
+
+
+\section{Conclusão}
+
+Resumo das contribuições:
+\begin{itemize}[topsep=2pt,itemsep=0pt]
+  \item Na Q1, a estratégia \emph{first-fail} sugerida pela
+    alínea~(a) do exercício~7 da fp3 traduz-se diretamente num
+    algoritmo guloso eficaz, consistentemente superior à
+    estratégia clássica de \emph{max-cobertura}, com excesso médio
+    estabilizado em $\approx 14\,\%$ relativamente ao ótimo nas
+    instâncias maiores.
+  \item Na Q2, a avaliação cruzada entre a implementação manual (MAC)
+    e os motores externos (CP-SAT e Prolog) validou a exatidão do
+    modelo matemático, retornando invariavelmente os mesmos custos
+    ótimos. Destaca-se a observação empírica da simetria de soluções
+    ótimas, em que diferentes solvers atingem o mesmo número mínimo de
+    guardas, mas com alocações geográficas distintas devido às
+    heurísticas de procura próprias de cada motor.
+  \item Na Q3, a análise teórica e prática da Programação Dinâmica
+    demonstrou que a densidade do grafo bidimensional planar e a
+    imprevisibilidade da largura da fronteira ($W$) geram uma explosão
+    combinatória exponencial ($\mathcal{O}(2^W)$). Conclui-se que esta
+    abordagem, embora matematicamente possível, é computacionalmente
+    impraticável e significativamente inferior às técnicas baseadas em
+    restrições utilizadas na Q2.
+  \item Na Q4a, distinguir as duas leituras da pergunta do enunciado
+    revela um aspeto subtil: o número mínimo de cores depende de qual
+    solução ótima de guardas se considera. Em ambas as leituras o
+    número de cores é pequeno ($\le 4$) e na Leitura~B é tipicamente
+    $1$ ou $2$.
+  \item Na Q4b, com o grafo dos vértices como leitura natural de
+    ``o grafo'', o número de guardas decresce rapidamente com $D$
+    e a generalização do modelo é direta.
+\end{itemize}
+
+\appendix
+\section{Estrutura da entrega}
+
+\begin{lstlisting}
+GRUPO_06/
+  relatorio.pdf                 (este documento)
+  README.txt                    (procedimentos de execucao)
+  programas/
+    rectParts.c, types.h, macros.h   (gerador da professora)
+    Q1/
+      instance.py    -- leitura e pre-processamento
+      greedy.py      -- estrategias first-fail e max-cobertura
+      exato.py       -- solver de PI (OR-Tools, referencia otima)
+      benchmark.py   -- estudo experimental da Q1
+    Q2/
+      instance_q2.py -- leitura e pre-processamento
+      ex2B_MAC_AC3.py-- MAC (AC-3) com branch & bound
+      ex2C_ORTools.py-- solver CP-SAT (OR-Tools)
+      ex2C_prolog.pl -- solver clpfd (SWI-Prolog)
+      ex2A.md        -- modelo matematico
+    Q3/
+      instance_q3.py -- leitura e pre-processamento
+      ex3_DP.py      -- programacao dinamica (bitmask)
+      ex3.md         -- avaliacao da aplicabilidade da PD
+    Q4/
+      instance_q4.py -- leitura com ordem e construcao do grafo
+      alcance.py     -- Q4b (set cover com alcance D)
+      cores.py       -- Q4a (Leituras A e B)
+      bench_alcance.py
+      bench_cores.py
+  casos_teste/
+    inst_10.txt, inst_20.txt, inst_40.txt, inst_80.txt
+\end{lstlisting}
+
+\end{document}
