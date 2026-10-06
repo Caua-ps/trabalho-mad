@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+programas/gerador
+programas/*.exe
+resultados_*.csv
+*.aux
+*.log
+*.out
+*.synctex.gz
+.DS_Store
